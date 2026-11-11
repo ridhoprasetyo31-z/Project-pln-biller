@@ -1,0 +1,125 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+@source '../views';
+@source '../js';
+
+/*
+ * Token desain Sistem Kinerja Biller (DESIGN-ringkas.md).
+ * Komponen hanya memakai token ini, tidak menulis hex sendiri.
+ */
+@theme {
+    --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+    --color-pln-blue: #0a5c8f;
+    --color-pln-blue-dark: #084a73;
+    --color-pln-blue-light: #e6f0f7;
+    --color-pln-blue-soft: #c9ddeb;
+    --color-pln-yellow: #f5c400;
+    --color-pln-yellow-light: #fff6cc;
+    --color-pln-yellow-ink: #6b5000;
+    --color-pln-red: #c8281f;
+
+    --color-error-ink: #a61f17;
+    --color-error-tint: #fceaea;
+    --color-error-deep: #7e1812;
+    --color-error-line: #e3b4b0;
+    --color-error-row: #fdf7f6;
+    --color-success-ink: #13703f;
+    --color-success-tint: #e5f4ec;
+
+    --color-ink: #0f1b2a;
+    --color-muted-ink: #546474;
+    --color-canvas: #eef2f5;
+    --color-line: #dce3ea;
+    --color-line-row: #edf1f5;
+    --color-table-head: #f3f6f9;
+
+    --radius-9: 9px;
+    --radius-10: 10px;
+    --radius-14: 14px;
+
+    --text-page-title: 26px;
+    --text-page-title--line-height: 1.25;
+    --text-page-title--font-weight: 600;
+    --text-section-title: 18px;
+    --text-section-title--line-height: 1.4;
+    --text-section-title--font-weight: 600;
+
+    --breakpoint-xs: 360px;
+}
+
+/* Variabel shadcn/ui dipetakan ke token PLN. */
+:root {
+    --radius: 0.625rem;
+    --background: #ffffff;
+    --foreground: var(--color-ink);
+    --card: #ffffff;
+    --card-foreground: var(--color-ink);
+    --popover: #ffffff;
+    --popover-foreground: var(--color-ink);
+    --primary: var(--color-pln-blue);
+    --primary-foreground: #ffffff;
+    --secondary: var(--color-canvas);
+    --secondary-foreground: var(--color-ink);
+    --muted: var(--color-table-head);
+    --muted-foreground: var(--color-muted-ink);
+    --accent: var(--color-pln-blue-light);
+    --accent-foreground: var(--color-pln-blue-dark);
+    --destructive: var(--color-pln-red);
+    --border: var(--color-line);
+    --input: var(--color-line);
+    --ring: var(--color-pln-blue);
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-canvas font-sans text-sm text-ink;
+        font-feature-settings: 'tnum';
+    }
+
+    .font-mono {
+        font-feature-settings: 'tnum', 'zero';
+    }
+
+    button:not(:disabled),
+    [role='button']:not(:disabled) {
+        cursor: pointer;
+    }
+}
