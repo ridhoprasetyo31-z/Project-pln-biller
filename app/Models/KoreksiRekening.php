@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PenyebabKoreksi;
 use App\Enums\StatusCatatan;
 use App\Models\Concerns\HasVerifikasi;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -33,6 +34,16 @@ class KoreksiRekening extends Model
             'tagihan_baru' => 'float',
             'jumlah_revisi' => 'integer',
         ];
+    }
+
+    public function scopeDiUnit(Builder $query, ?int $unitId): void
+    {
+        $query->whereIn('pelanggan_id', Invoice::pelangganDiUnit($unitId));
+    }
+
+    public function bisaDiubahBiller(): bool
+    {
+        return in_array($this->status, [StatusCatatan::Draft, StatusCatatan::Revisi], true);
     }
 
     public function pelanggan(): BelongsTo

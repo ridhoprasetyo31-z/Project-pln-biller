@@ -5,10 +5,14 @@ namespace App\Models;
 use App\Enums\HasilTusbug;
 use App\Enums\StatusTusbug;
 use App\Models\Concerns\HasVerifikasi;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
+/**
+ * Tugas pemutusan (TUSBUG) untuk pelanggan dengan tunggakan.
+ */
 class Tusbug extends Model
 {
     use HasVerifikasi;
@@ -17,7 +21,7 @@ class Tusbug extends Model
 
     protected $fillable = [
         'nomor_surat', 'pelanggan_id', 'biller_id', 'ditugaskan_oleh', 'jumlah_lembar', 'total_tunggakan',
-        'tanggal_rencana', 'dilaksanakan_at', 'hasil', 'latitude', 'longitude', 'jarak_m', 'status', 'jumlah_revisi',
+        'tanggal_rencana', 'dilaksanakan_at', 'hasil', 'keterangan', 'latitude', 'longitude', 'jarak_m', 'status', 'jumlah_revisi',
     ];
 
     protected function casts(): array
@@ -34,6 +38,23 @@ class Tusbug extends Model
             'jarak_m' => 'float',
             'jumlah_revisi' => 'integer',
         ];
+    }
+
+    public function scopeDiUnit(Builder $query, ?int $unitId): void
+    {
+        $query->whereIn('pelanggan_id', Invoice::pelangganDiUnit($unitId));
+    }
+
+    /** Masih terbuka: belum disetujui (ditugaskan, menunggu, ditandai, revisi). */
+    public function scopeTerbuka(Builder $query): void
+    {
+        $query->where('status', '!=', StatusTusbug::Disetujui->value);
+    }
+
+    /** Biller boleh mengisi hasil saat masih ditugaskan atau dikembalikan untuk revisi. */
+    public function bisaDilaksanakan(): bool
+    {
+        return in_array($this->status, [StatusTusbug::Ditugaskan, StatusTusbug::Revisi], true);
     }
 
     public function pelanggan(): BelongsTo

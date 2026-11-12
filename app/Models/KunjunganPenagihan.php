@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\HasilKunjungan;
 use App\Enums\StatusCatatan;
 use App\Models\Concerns\HasVerifikasi;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,9 +16,19 @@ class KunjunganPenagihan extends Model
     protected $table = 'kunjungan_penagihan';
 
     protected $fillable = [
-        'invoice_id', 'biller_id', 'dikunjungi_at', 'hasil', 'tanggal_janji', 'nominal_dibayar',
+        'invoice_id', 'biller_id', 'dikunjungi_at', 'hasil', 'tanggal_janji', 'nominal_dibayar', 'keterangan',
         'latitude', 'longitude', 'jarak_m', 'status', 'jumlah_revisi',
     ];
+
+    public function scopeDiUnit(Builder $query, ?int $unitId): void
+    {
+        $query->whereIn('invoice_id', Invoice::query()->select('id')->diUnit($unitId));
+    }
+
+    public function bisaDiubahBiller(): bool
+    {
+        return in_array($this->status, [StatusCatatan::Draft, StatusCatatan::Revisi], true);
+    }
 
     protected function casts(): array
     {

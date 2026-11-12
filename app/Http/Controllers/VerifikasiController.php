@@ -3,103 +3,118 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AlasanTolak;
-use App\Enums\StatusCatatan;
 use App\Http\Requests\TolakCatatanRequest;
-use App\Models\PencatatanMeter;
-use App\Models\Verifikasi;
-use App\Services\RiwayatPemakaian;
+use App\Models\Pdil;
 use App\Services\VerificationService;
-use App\Support\StatusCatatanView;
-use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
+use App\Verifikasi\SumberKoreksi;
+use App\Verifikasi\SumberKunjungan;
+use App\Verifikasi\SumberPdil;
+use App\Verifikasi\SumberPencatatan;
+use App\Verifikasi\SumberTusbug;
+use App\Verifikasi\SumberVerifikasi;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Antrean verifikasi koordinator. Tahap 3 berisi catatan meter; modul lain
- * (kunjungan penagihan, koreksi, PDIL, TUSBUG) bergabung di tahap berikutnya
- * lewat parameter {tipe} yang sama.
+ * Satu antrean verifikasi untuk semua modul (PRD 3.8): catat meter,
+ * kunjungan penagihan, dan koreksi rekening. Modul berikutnya cukup
+ * menambah kelas SumberVerifikasi baru di daftar sumber().
  */
 class VerifikasiController extends Controller
 {
-    /** Tipe catatan yang bisa diverifikasi (alias morph map → model). */
-    private const TIPE = [
-        'pencatatan_meter' => PencatatanMeter::class,
-    ];
+    private const PER_HALAMAN = 30;
 
     public function __construct(private readonly VerificationService $service) {}
 
-    public function index(Request $request, RiwayatPemakaian $riwayat): Response
+    /** @return array<string, SumberVerifikasi> */
+    private function sumber(): array
+    {
+        return collect([
+            app(SumberPencatatan::class),
+            app(SumberKunjungan::class),
+            app(SumberKoreksi::class),
+            app(SumberPdil::class),
+            app(SumberTusbug::class),
+        ])->keyBy(fn (SumberVerifikasi $s) => $s->tipe())->all();
+    }
+
+    public function index(Request $request): Response
     {
         $unitId = $request->user()->unit_id;
-        $dasar = fn () => PencatatanMeter::query()->diUnit($unitId);
+        $semua = $this->sumber();
+        $jenis = $request->input('jenis');
+        $aktif = isset($semua[$jenis]) ? [$jenis => $semua[$jenis]] : $semua;
 
-        $jumlah = [
-            'ditandai' => $dasar()->periodeTerbuka()->where('status', StatusCatatan::Ditandai)->count(),
-            'normal' => $dasar()->periodeTerbuka()->where('status', StatusCatatan::MenungguVerifikasi)->count(),
-            'diperiksa' => $dasar()->periodeTerbuka()->whereIn('status', [StatusCatatan::Disetujui, StatusCatatan::Revisi])->whereHas('verifikasi')->count(),
-        ];
+        $jumlah = collect(['ditandai', 'normal', 'diperiksa'])
+            ->mapWithKeys(fn ($tab) => [$tab => collect($aktif)->sum(fn (SumberVerifikasi $s) => $s->jumlah($unitId, $tab))])
+            ->all();
 
         $tab = $request->input('tab');
         if (! in_array($tab, ['ditandai', 'normal', 'diperiksa'], true)) {
             $tab = $jumlah['ditandai'] > 0 ? 'ditandai' : 'normal';
         }
 
-        $antrean = $this->queryTab($dasar(), $tab)
-            ->with([
-                'pelanggan:id,idpel,nama',
-                'biller:id,name',
-                'anomali:id,anomaliable_id,anomaliable_type,jenis',
-                'lampiran',
-            ])
-            ->paginate(30)
-            ->withQueryString()
-            ->through(fn (PencatatanMeter $c) => [
-                'id' => $c->id,
-                'idpel' => $c->pelanggan->idpel,
-                'nama' => $c->pelanggan->nama,
-                'biller' => $c->biller->name,
-                'dikirim_at' => $c->dikirim_at?->toIso8601String(),
-                'status' => $c->status->value,
-                'anomali' => $c->anomali->map(fn ($a) => $a->jenis->value)->unique()->values(),
-                'thumb' => StatusCatatanView::fotoUtama($c)?->thumbnailUrl(),
-                'jumlah_revisi' => $c->jumlah_revisi,
-            ]);
+        $items = collect($aktif)
+            ->flatMap(fn (SumberVerifikasi $s) => $s->items($unitId, $tab))
+            ->sortBy('urut', SORT_REGULAR, $tab === 'diperiksa')
+            ->values();
 
-        $dipilihId = $request->integer('id') ?: ($antrean->first()['id'] ?? null);
-        $dipilih = $dipilihId
-            ? $dasar()->with([
-                'pelanggan', 'periode', 'biller:id,name,nip', 'anomali', 'lampiran',
-                'verifikasi.verifikator:id,name',
-            ])->find($dipilihId)
-            : null;
+        $halaman = max(1, $request->integer('page', 1));
+        $antrean = new LengthAwarePaginator(
+            $items->forPage($halaman, self::PER_HALAMAN)->values(),
+            $items->count(),
+            self::PER_HALAMAN,
+            $halaman,
+            ['path' => route('verifikasi.index'), 'query' => $request->only(['tab', 'jenis'])],
+        );
+
+        $tipeDipilih = $request->input('tipe');
+        $idDipilih = $request->integer('id');
+        if (! $idDipilih || ! isset($semua[$tipeDipilih])) {
+            $pertama = $antrean->first();
+            $tipeDipilih = $pertama['tipe'] ?? null;
+            $idDipilih = $pertama['id'] ?? null;
+        }
+        $model = $tipeDipilih ? $semua[$tipeDipilih]->temukan($unitId, (int) $idDipilih) : null;
 
         return Inertia::render('Verifikasi/Index', [
             'tab' => $tab,
+            'jenis' => isset($semua[$jenis]) ? $jenis : null,
             'jumlah' => $jumlah,
+            'jenisOptions' => collect($semua)->map(fn (SumberVerifikasi $s) => [
+                'value' => $s->tipe(),
+                'label' => $s->label(),
+                'menunggu' => $s->jumlah($unitId, 'ditandai') + $s->jumlah($unitId, 'normal'),
+            ])->values(),
             'antrean' => $antrean,
-            'detail' => $dipilih ? $this->detail($dipilih, $riwayat) : null,
+            'detail' => $model ? $semua[$tipeDipilih]->detail($model) : null,
             'alasanOptions' => AlasanTolak::options(),
         ]);
     }
 
     public function setujui(Request $request, string $tipe, int $id): RedirectResponse
     {
-        $catatan = $this->temukan($tipe, $id);
+        $catatan = $this->temukan($request, $tipe, $id);
         $this->authorize('verifikasi', $catatan);
 
-        $data = $request->validate(['catatan' => ['nullable', 'string', 'max:500'], 'tab' => ['nullable', 'string']]);
+        $data = $request->validate([
+            'catatan' => ['nullable', 'string', 'max:500'],
+            'tab' => ['nullable', 'string'],
+            'jenis' => ['nullable', 'string'],
+        ]);
         $this->service->setujui($catatan, $request->user(), $data['catatan'] ?? null);
 
-        return to_route('verifikasi.index', ['tab' => $data['tab'] ?? null])
-            ->with('success', "Catatan {$this->label($catatan)} disetujui.");
+        return to_route('verifikasi.index', array_filter(['tab' => $data['tab'] ?? null, 'jenis' => $data['jenis'] ?? null]))
+            ->with('success', "{$this->sumber()[$tipe]->label()} {$this->label($catatan)} disetujui.");
     }
 
     public function tolak(TolakCatatanRequest $request, string $tipe, int $id): RedirectResponse
     {
-        $catatan = $this->temukan($tipe, $id);
+        $catatan = $this->temukan($request, $tipe, $id);
         $this->authorize('verifikasi', $catatan);
 
         $this->service->tolak(
@@ -109,92 +124,26 @@ class VerifikasiController extends Controller
             $request->validated('catatan'),
         );
 
-        return to_route('verifikasi.index', ['tab' => $request->validated('tab')])
-            ->with('success', "Catatan {$this->label($catatan)} dikembalikan ke biller untuk revisi.");
+        return to_route('verifikasi.index', array_filter(['tab' => $request->validated('tab'), 'jenis' => $request->input('jenis')]))
+            ->with('success', "{$this->sumber()[$tipe]->label()} {$this->label($catatan)} dikembalikan ke biller untuk revisi.");
     }
 
-    private function queryTab(Builder $q, string $tab): Builder
+    private function temukan(Request $request, string $tipe, int $id): Model
     {
-        return match ($tab) {
-            'ditandai' => $q->periodeTerbuka()->where('status', StatusCatatan::Ditandai)->orderBy('dikirim_at'),
-            'normal' => $q->periodeTerbuka()->where('status', StatusCatatan::MenungguVerifikasi)->orderBy('dikirim_at'),
-            // Hanya periode terbuka; catatan periode yang sudah ditutup ada di Laporan.
-            default => $q->periodeTerbuka()->whereIn('status', [StatusCatatan::Disetujui, StatusCatatan::Revisi])
-                ->whereHas('verifikasi')
-                ->orderByDesc(Verifikasi::query()
-                    ->select('id')
-                    ->whereColumn('verifiable_id', 'pencatatan_meter.id')
-                    ->where('verifiable_type', 'pencatatan_meter')
-                    ->latest('id')
-                    ->limit(1)),
-        };
+        $sumber = $this->sumber()[$tipe] ?? abort(404);
+        $kelas = $sumber->query(null)->getModel()::class;
+
+        // Cari tanpa batas unit; otorisasi unit dicek policy (403, bukan 404).
+        return $kelas::query()->findOrFail($id);
     }
 
-    private function detail(PencatatanMeter $c, RiwayatPemakaian $riwayat): array
+    private function label(Model $m): string
     {
-        $pelanggan = $c->pelanggan;
-        $pasca = $c->jenis->value === 'pascabayar';
-        $histori = $riwayat->untuk($pelanggan->id, $c->periode, 3)->reverse()->values();
-        $bulan = fn (string $kode) => CarbonImmutable::createFromFormat('Ym', $kode)->startOfMonth()->locale('id')->translatedFormat('M');
-        $foto = StatusCatatanView::fotoUtama($c);
+        if ($m instanceof Pdil) {
+            return $m->nama.($m->idpel ? " ({$m->idpel})" : '');
+        }
+        $pelanggan = $m->pelanggan ?? $m->invoice?->pelanggan;
 
-        $bars = $histori->map(fn ($h) => [
-            'label' => $bulan($h->kode),
-            'nilai' => $pasca ? $h->pemakaian_kwh : $h->sisa_kwh,
-            'kini' => false,
-        ])->push([
-            'label' => $bulan($c->periode->kode),
-            'nilai' => $pasca ? $c->pemakaian_kwh : $c->sisa_kwh,
-            'kini' => true,
-        ]);
-
-        return [
-            'id' => $c->id,
-            'tipe' => 'pencatatan_meter',
-            'status' => $c->status->value,
-            'jenis' => $c->jenis->value,
-            'periode' => $c->periode->kode,
-            'pelanggan' => [
-                'idpel' => $pelanggan->idpel,
-                'nama' => $pelanggan->nama,
-                'alamat' => "{$pelanggan->alamat}, {$pelanggan->kelurahan}",
-                'tarif' => $pelanggan->labelTarif(),
-                'nomor_meter' => $pelanggan->nomor_meter,
-                'latitude' => $pelanggan->latitude,
-                'longitude' => $pelanggan->longitude,
-            ],
-            'biller' => $c->biller->only(['name', 'nip']),
-            'stand_lalu' => $c->stand_lalu,
-            'stand_kini' => $c->stand_kini,
-            'pemakaian_kwh' => $c->pemakaian_kwh,
-            'sisa_kwh' => $c->sisa_kwh,
-            'rata_tiga_bulan' => $pasca ? $riwayat->rataTigaBulan($pelanggan->id, $c->periode) : null,
-            'kondisi' => $c->kondisi_meter->label(),
-            'keterangan' => $c->keterangan,
-            'latitude' => $c->latitude,
-            'longitude' => $c->longitude,
-            'jarak_m' => $c->jarak_m,
-            'dikirim_at' => $c->dikirim_at?->toIso8601String(),
-            'tepat_waktu' => $c->tepat_waktu,
-            'jumlah_revisi' => $c->jumlah_revisi,
-            'foto' => StatusCatatanView::foto($foto),
-            'anomali' => StatusCatatanView::anomali($c->anomali),
-            'riwayatVerifikasi' => $c->verifikasi->map(fn ($v) => StatusCatatanView::verifikasi($v))->values(),
-            'bars' => $bars,
-            'bisaDiputuskan' => in_array($c->status, [StatusCatatan::MenungguVerifikasi, StatusCatatan::Ditandai], true)
-                && $c->periode->bisaDiubah(),
-        ];
-    }
-
-    private function temukan(string $tipe, int $id): PencatatanMeter
-    {
-        abort_unless(isset(self::TIPE[$tipe]), 404);
-
-        return self::TIPE[$tipe]::with('pelanggan:id,idpel,nama')->findOrFail($id);
-    }
-
-    private function label(PencatatanMeter $c): string
-    {
-        return "{$c->pelanggan->nama} ({$c->pelanggan->idpel})";
+        return $pelanggan ? "{$pelanggan->nama} ({$pelanggan->idpel})" : "#{$m->getKey()}";
     }
 }

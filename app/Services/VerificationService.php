@@ -5,7 +5,13 @@ namespace App\Services;
 use App\Enums\AlasanTolak;
 use App\Enums\KeputusanVerifikasi;
 use App\Enums\StatusPeriode;
+use App\Models\KoreksiRekening;
+use App\Models\KunjunganPenagihan;
+use App\Models\Pdil;
+use App\Models\PencatatanMeter;
+use App\Models\Tusbug;
 use App\Models\User;
+use App\Notifications\CatatanDikembalikan;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,13 +34,53 @@ class VerificationService
             $this->pastikanBisaDiverifikasi($catatan);
 
             $perubahan = ['status' => 'disetujui'];
-            if ($catatan->isFillable('disetujui_at')) {
+            // Hanya catatan meter yang punya kolom disetujui_at (isFillable tidak bisa dipakai:
+            // selalu true saat model di-unguard, misalnya di seeder).
+            if ($catatan instanceof PencatatanMeter) {
                 $perubahan['disetujui_at'] = now();
             }
             $catatan->update($perubahan);
 
             $this->catat($catatan, $verifikator, KeputusanVerifikasi::Disetujui, null, $catatanTeks);
+            $this->setelahDisetujui($catatan);
         });
+    }
+
+    /**
+     * Efek lanjutan per modul setelah catatan disetujui:
+     * catat meter pascabayar → invoice terbit; kunjungan "lunas" → invoice lunas;
+     * koreksi rekening → invoice & catatan meter diperbarui, skor dihitung ulang.
+     */
+    private function setelahDisetujui(Model $catatan): void
+    {
+        match (true) {
+            $catatan instanceof PencatatanMeter => app(InvoiceGenerator::class)->buatUntuk($catatan),
+            $catatan instanceof KunjunganPenagihan => app(KunjunganService::class)->terapkan($catatan),
+            $catatan instanceof KoreksiRekening => app(KoreksiService::class)->terapkan($catatan),
+            $catatan instanceof Pdil => app(PdilService::class)->terapkan($catatan),
+            $catatan instanceof Tusbug => app(TusbugService::class)->terapkan($catatan),
+            default => null,
+        };
+    }
+
+    /** Beri tahu biller pemilik catatan lewat lonceng notifikasi. */
+    private function kabariDikembalikan(Model $catatan, AlasanTolak $alasan, ?string $teks): void
+    {
+        [$label, $pemilikId, $pelanggan, $url] = match (true) {
+            $catatan instanceof PencatatanMeter => ['Catat meter', $catatan->biller_id, $catatan->pelanggan?->nama,
+                route("catat.{$catatan->jenis->value}", $catatan->pelanggan_id)],
+            $catatan instanceof KunjunganPenagihan => ['Kunjungan penagihan', $catatan->biller_id, $catatan->invoice?->pelanggan?->nama,
+                route('kunjungan.edit', $catatan)],
+            $catatan instanceof KoreksiRekening => ['Koreksi rekening', $catatan->diajukan_oleh, $catatan->pelanggan?->nama,
+                route('koreksi-rekening.edit', $catatan)],
+            $catatan instanceof Pdil => ['PDIL', $catatan->biller_id, $catatan->nama, route('pdil.edit', $catatan)],
+            $catatan instanceof Tusbug => ['TUSBUG', $catatan->biller_id, $catatan->pelanggan?->nama, route('tusbug.show', $catatan)],
+            default => [null, null, null, null],
+        };
+
+        if ($label && $pemilikId) {
+            User::find($pemilikId)?->notify(new CatatanDikembalikan($label, $pelanggan ?? 'Pelanggan', $alasan->label(), $teks, $url));
+        }
     }
 
     /** @throws ValidationException */
@@ -54,6 +100,8 @@ class VerificationService
 
             $this->catat($catatan, $verifikator, KeputusanVerifikasi::Ditolak, $alasan, $catatanTeks);
         });
+
+        $this->kabariDikembalikan($catatan, $alasan, $catatanTeks);
     }
 
     private function pastikanBisaDiverifikasi(Model $catatan): void
@@ -67,7 +115,9 @@ class VerificationService
             ]);
         }
 
-        if ($catatan->isRelation('periode') && $catatan->periode_id) {
+        // Hanya catat meter yang terkunci saat periode ditutup; koreksi rekening justru
+        // diajukan untuk periode yang sudah lewat.
+        if ($catatan instanceof PencatatanMeter && $catatan->periode_id) {
             $periode = $catatan->periode()->first();
             if ($periode?->status === StatusPeriode::Ditutup) {
                 throw ValidationException::withMessages([

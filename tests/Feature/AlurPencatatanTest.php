@@ -129,7 +129,7 @@ test('alur lengkap: kirim, ditolak koordinator, direvisi biller, lalu disetujui'
     expect($catatan->status)->toBe(StatusCatatan::Revisi)
         ->and($catatan->jumlah_revisi)->toBe(1)
         ->and($catatan->verifikasi()->count())->toBe(1)
-        ->and($inbox->badges($this->biller))->toBe(['revisi' => 1])
+        ->and($inbox->badges($this->biller))->toBe(['revisi' => 1, 'tusbug' => 0])
         ->and($inbox->badges($this->koordinator))->toBe(['verifikasi' => 0]);
 
     // Biller melihat alasan di form dan mengirim ulang tanpa foto baru (foto lama dipakai).
@@ -154,7 +154,7 @@ test('alur lengkap: kirim, ditolak koordinator, direvisi biller, lalu disetujui'
     expect($catatan->status)->toBe(StatusCatatan::Disetujui)
         ->and($catatan->disetujui_at)->not->toBeNull()
         ->and($catatan->verifikasi()->count())->toBe(2)
-        ->and($inbox->badges($this->biller))->toBe(['revisi' => 0]);
+        ->and($inbox->badges($this->biller))->toBe(['revisi' => 0, 'tusbug' => 0]);
 
     // Catatan yang disetujui tidak bisa diubah lagi oleh biller.
     kirimCatatan($this, ['stand_kini' => '1500'])->assertSessionHasErrors('catatan');

@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\HitungSkorKinerja;
+use App\Jobs\TandaiInvoiceMenunggak;
 use App\Models\Periode;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -24,6 +25,13 @@ Artisan::command('kinerja:hitung {kode? : Kode periode YYYYMM} {--final : Tandai
 
     return 0;
 })->purpose('Hitung skor kinerja biller untuk satu periode');
+
+// Invoice lewat jatuh tempo → menunggak, tiap hari pukul 00.30 WIB.
+Schedule::job(new TandaiInvoiceMenunggak)
+    ->dailyAt('00:30')
+    ->timezone('Asia/Jakarta')
+    ->name('tandai-invoice-menunggak')
+    ->withoutOverlapping();
 
 // PRD: skor sementara periode berjalan dihitung tiap malam pukul 01.00 WIB.
 Schedule::job(new HitungSkorKinerja)

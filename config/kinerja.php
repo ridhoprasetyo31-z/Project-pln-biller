@@ -30,4 +30,8 @@ return [
 
     // Pajak Penerangan Jalan, persen dari tagihan listrik.
     'ppj_persen' => 3,
+
+    // Jatuh tempo invoice: sekian hari setelah batas pencatatan periode.
+    // Bukan pengaturan KPI, jadi tidak disimpan di tabel pengaturan.
+    'jatuh_tempo_hari' => 25,
 ];

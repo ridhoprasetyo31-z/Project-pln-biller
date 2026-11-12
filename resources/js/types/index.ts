@@ -26,6 +26,10 @@ export interface SharedProps {
     auth: { user: AuthUser | null };
     navBadges: NavBadges | null;
     flash: { success: string | null; error: string | null; impor: ImporHasil | null };
+    notifikasi: {
+        belum_dibaca: number;
+        daftar: { id: string; jenis: string | null; judul: string; pesan: string; waktu: string; dibaca: boolean }[];
+    } | null;
     errors: Record<string, string>;
     [key: string]: unknown;
 }

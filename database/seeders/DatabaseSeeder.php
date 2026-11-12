@@ -19,6 +19,10 @@ class DatabaseSeeder extends Seeder
             PeriodeSeeder::class,
             RiwayatPencatatanSeeder::class,
             AktivitasBerjalanSeeder::class,
+            InvoiceSeeder::class,
+            PenagihanDemoSeeder::class,
+            PdilTusbugDemoSeeder::class,
+            SkorKinerjaSeeder::class,
         ]);
 
         config(['activitylog.enabled' => true]);

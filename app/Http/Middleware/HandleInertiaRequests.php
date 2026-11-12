@@ -44,6 +44,18 @@ class HandleInertiaRequests extends Middleware
             ],
             // Jumlah antrean per menu (diisi ActionInboxService mulai Tahap 3).
             'navBadges' => fn () => $user ? (object) app(ActionInboxService::class)->badges($user) : null,
+            // Lonceng: 8 notifikasi terbaru + jumlah yang belum dibaca.
+            'notifikasi' => fn () => $user ? [
+                'belum_dibaca' => $user->unreadNotifications()->count(),
+                'daftar' => $user->notifications()->latest()->limit(8)->get()->map(fn ($n) => [
+                    'id' => $n->id,
+                    'jenis' => $n->data['jenis'] ?? null,
+                    'judul' => $n->data['judul'] ?? 'Notifikasi',
+                    'pesan' => $n->data['pesan'] ?? '',
+                    'waktu' => $n->created_at->toIso8601String(),
+                    'dibaca' => $n->read_at !== null,
+                ]),
+            ] : null,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

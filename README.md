@@ -36,6 +36,20 @@ Foto lampiran data demo adalah gambar contoh (bukan foto meter asli) di `storage
 
 PHP butuh ekstensi `zip` aktif (untuk impor/ekspor Excel).
 
+## Skor kinerja
+
+Skor sementara periode berjalan dihitung otomatis tiap malam pukul 01.00 WIB, dan skor final dihitung saat periode ditutup. Jadwal butuh scheduler Laravel aktif:
+
+```bash
+php artisan schedule:work          # saat pengembangan
+php artisan kinerja:hitung         # hitung manual periode berjalan
+php artisan kinerja:hitung 202609 --final
+```
+
+Invoice belum bayar yang lewat jatuh tempo berubah menjadi menunggak tiap hari pukul 00.30 WIB (job `TandaiInvoiceMenunggak`, juga lewat scheduler).
+
+Koordinator dan super admin juga bisa menekan "Hitung ulang" di dashboard. Definisi angka mentah dan rumusnya ada di `app/Services/KpiCalculator.php`.
+
 ## Tes
 
 Tes memakai database MySQL `biller_pln_test` (lihat `phpunit.xml`).
@@ -50,8 +64,18 @@ npm run typecheck
 - [x] 1. Fondasi: install, token, font, AppLayout, AuthLayout, auth, profil
 - [x] 2. Data master: migrasi semua tabel, seeder demo, halaman Pengaturan
 - [x] 3. Tugas, Catat pascabayar & prabayar, AnomalyDetector, Verifikasi
-- [ ] 4. KpiCalculator, job, tutup periode, Dashboard, Kinerja saya, ekspor
-- [ ] 5. Invoice, PDF, penagihan, koreksi rekening
-- [ ] 6. PDIL, TUSBUG
+- [x] 4. KpiCalculator, job, tutup periode, Dashboard, Kinerja saya, ekspor
+- [x] 5. Invoice, PDF, penagihan, koreksi rekening
+- [x] 6. PDIL, TUSBUG, notifikasi lonceng, data lapangan koordinator
+
+## Menu per peran
+
+| Peran | Menu |
+|---|---|
+| Biller | Tugas hari ini, Perlu revisi, Riwayat catatan, Kinerja saya, Penagihan, Koreksi rekening, PDIL, TUSBUG, Profil |
+| Koordinator admin | Dashboard, Verifikasi, Laporan, Pencatatan, Pelanggan, Rute, Biller (hanya baca, unitnya), Penagihan, Koreksi rekening, PDIL, TUSBUG, Profil |
+| Super admin | Dashboard, Laporan, Pengguna, Unit, Rute, Pelanggan, Tarif, Periode, Bobot dan ambang KPI, Profil |
+
+Semua route dilindungi middleware peran dan policy per model (`app/Policies`).
 
 Menu di sidebar diambil dari `resources/js/lib/navigation.ts`. Item yang route-nya belum dibuat otomatis disembunyikan, jadi menu bertambah sendiri tiap tahap selesai.

@@ -30,6 +30,8 @@ interface PhotoCaptureProps {
     ambangJarak: number;
     error?: string;
     disabled?: boolean;
+    /** Teks saat belum ada foto. */
+    petunjuk?: string;
 }
 
 const MAKS_BYTE = 5 * 1024 * 1024;
@@ -51,6 +53,7 @@ export default function PhotoCapture({
     ambangJarak,
     error,
     disabled,
+    petunjuk = 'Belum ada foto. Foto angka meter dengan jelas, tanpa pantulan cahaya.',
 }: PhotoCaptureProps) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [preview, setPreview] = useState<string | null>(null);
@@ -120,7 +123,7 @@ export default function PhotoCapture({
                 ) : (
                     <div className="flex flex-col items-center gap-2 px-6 text-center text-sm text-white/70">
                         <ImageOff className="size-8" aria-hidden />
-                        Belum ada foto. Foto angka meter dengan jelas, tanpa pantulan cahaya.
+                        {petunjuk}
                     </div>
                 )}
                 {memproses && (

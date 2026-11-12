@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\JenisPelanggan;
+use App\Enums\StatusInvoice;
 use App\Enums\StatusPelanggan;
 use App\Models\Concerns\AuditMaster;
 use Illuminate\Database\Eloquent\Builder;
@@ -53,6 +54,25 @@ class Pelanggan extends Model
     public function scopeAktif(Builder $query): void
     {
         $query->where('status', StatusPelanggan::Aktif);
+    }
+
+    /**
+     * Pelanggan yang diputus sementara kembali aktif bila tidak ada lagi
+     * rekening menunggak (dipanggil saat rekening dilunasi).
+     */
+    public function pulihkanBilaLunas(): void
+    {
+        if ($this->status !== StatusPelanggan::PutusSementara) {
+            return;
+        }
+
+        $masihMenunggak = Invoice::where('pelanggan_id', $this->id)
+            ->where('status', StatusInvoice::Menunggak)
+            ->exists();
+
+        if (! $masihMenunggak) {
+            $this->update(['status' => StatusPelanggan::Aktif]);
+        }
     }
 
     /** Label tarif singkat, contoh "R1 / 1.300 VA". */

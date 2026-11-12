@@ -24,10 +24,10 @@ class RiwayatPencatatanSeeder extends Seeder
     public const PROFIL = [
         'biller@biller.test' => [1, 3, 2, 2],
         'dewi@biller.test' => [0, 1, 1, 1],
-        'rudi@biller.test' => [6, 12, 10, 8],
+        'rudi@biller.test' => [12, 28, 30, 22],  // sengaja lemah: "Perlu pembinaan"
         'fajar@biller.test' => [2, 4, 5, 3],
         'yuni@biller.test' => [1, 2, 2, 2],
-        'agus@biller.test' => [4, 8, 15, 6],
+        'agus@biller.test' => [8, 18, 28, 14],   // sengaja sedang: "Dipantau"
     ];
 
     public function run(): void

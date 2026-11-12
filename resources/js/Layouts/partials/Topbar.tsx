@@ -1,13 +1,13 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Bell, ChevronRight, House, Search, Wifi, WifiOff } from 'lucide-react';
+import { ChevronRight, House, Search, Wifi, WifiOff } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/Components/ui/dropdown-menu';
 import { useNavigation } from '@/hooks/useNavigation';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { cn } from '@/lib/utils';
 import type { BreadcrumbItem, PageProps } from '@/types';
 import CommandSearch from './CommandSearch';
+import Lonceng from './Lonceng';
 
 function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
     return (
@@ -108,17 +108,7 @@ export default function Topbar({ breadcrumbs }: { breadcrumbs?: BreadcrumbItem[]
                 <span className="sr-only sm:hidden">Cari menu</span>
             </button>
 
-            <DropdownMenu>
-                <DropdownMenuTrigger className="inline-flex size-10 items-center justify-center rounded-9 border border-border bg-white text-muted-ink outline-none hover:bg-table-head hover:text-ink focus-visible:ring-[3px] focus-visible:ring-pln-blue/25">
-                    <Bell className="size-4" />
-                    <span className="sr-only">Notifikasi</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72">
-                    <DropdownMenuLabel className="font-semibold">Notifikasi</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <p className="px-2.5 py-6 text-center text-sm text-muted-ink">Belum ada notifikasi.</p>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <Lonceng />
 
             <CommandSearch open={searchOpen} onOpenChange={setSearchOpen} />
         </div>
